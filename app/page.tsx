@@ -1,104 +1,216 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
+import type { CabinData } from "@/components/StudyScene";
 
-const StudyScene = dynamic(() => import("@/components/StudyScene"), {
-  ssr: false,
-});
+const StudyScene = dynamic(() => import("@/components/StudyScene"), { ssr: false });
+
+const COLS = 6;
+const ROWS = 4;
+function randomCabinId() {
+  return `cabin-${Math.floor(Math.random() * COLS * ROWS)}`;
+}
+
+type Msg = { role: "executor" | "user"; text: string };
 
 export default function Home() {
   const [username, setUsername] = useState("flash-source");
-  const [repos, setRepos] = useState<string[]>([]);
+  const [previewRepos, setPreviewRepos] = useState<string[]>([]);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
-  const [chatHistory, setChatHistory] = useState<{ role: string; text: string }[]>([]);
+  const [activeCabinId, setActiveCabinId] = useState<string | null>(null);
+  const [cabinData, setCabinData] = useState<CabinData | null>(null);
+  const [chatHistory, setChatHistory] = useState<Msg[]>([]);
   const [userInput, setUserInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showWill, setShowWill] = useState(false);
+  const [willMarkdown, setWillMarkdown] = useState("");
 
-  useEffect(() => {
-    const name = username.trim();
-    if (!name) return;
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const timer = setTimeout(() => {
-      fetch(`https://api.github.com/users/${name}/repos?sort=updated&per_page=3`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setRepos(data.map((r: any) => r.name));
-          }
-        })
-        .catch(() => {});
+  async function previewFor(name: string): Promise<string[]> {
+    try {
+      const res = await fetch(
+        `https://api.github.com/users/${name}/repos?sort=updated&per_page=6`
+      );
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const names = data.map((r: any) => r.name);
+        setPreviewRepos(names);
+        return names;
+      }
+      setPreviewRepos([]);
+      return [];
+    } catch {
+      setPreviewRepos([]);
+      return [];
+    }
+  }
+
+  function onUsernameChange(value: string) {
+    setUsername(value);
+    if (previewTimer.current) clearTimeout(previewTimer.current);
+    const name = value.trim();
+    if (!name) {
+      setPreviewRepos([]);
+      return;
+    }
+    previewTimer.current = setTimeout(() => {
+      previewFor(name);
     }, 600);
+  }
 
-    return () => clearTimeout(timer);
-  }, [username]);
-
-  const handleInteract = async (repo: string) => {
-    setSelectedRepo(repo);
-    setChatHistory([]);
-    setShowWill(false);
+  async function enterStudy() {
+    const name = username.trim();
+    if (!name || isProcessing) return;
     setIsProcessing(true);
 
     try {
-      const res = await fetch("/api/executor", {
+      let repos = previewRepos;
+      if (!repos.length) {
+        repos = await previewFor(name);
+      }
+      if (!repos.length) {
+        alert("No public repositories found for that user.");
+        return;
+      }
+
+      const repo = repos[Math.floor(Math.random() * repos.length)];
+
+      const facts = await fetch("/api/successors", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ owner: username.trim(), repo, mode: "interview" }),
+        body: JSON.stringify({ owner: name, repo }),
+      }).then((r) => r.json());
+
+      const autopsy = await fetch("/api/executor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "autopsy",
+          owner: name,
+          repo,
+          repoMeta: facts.repo,
+          lastCommit: facts.lastCommit,
+          candidates: facts.candidates,
+        }),
+      }).then((r) => r.json());
+
+      const cabinId = randomCabinId();
+
+      setCabinData({
+        id: cabinId,
+        repoName: repo,
+        papers: [
+          {
+            title: "AUTOPSY",
+            body: `${autopsy.causeOfDeath ?? "Cause unknown."}\n\n— ${autopsy.epitaph ?? "—"}`,
+          },
+          {
+            title: "LAST COMMIT",
+            body: `${(facts.lastCommit?.message ?? "No commits recorded.").split("\n")[0]}\n— ${
+              facts.lastCommit?.author ?? "unknown"
+            }\n${
+              facts.lastCommit?.date
+                ? new Date(facts.lastCommit.date).toLocaleDateString()
+                : ""
+            }`,
+          },
+          {
+            title: "SUCCESSOR CANDIDATE",
+            body: `${autopsy.recommendedSuccessor ?? "none"}\n\n${
+              autopsy.reasoning ?? ""
+            }\n\n"${autopsy.firstQuestion ?? "The executor awaits."}"`,
+          },
+        ],
       });
-      const data = await res.json();
-      setChatHistory([{ role: "executor", text: data.response }]);
-    } catch (e) {
-      setChatHistory([{ role: "executor", text: "The executor awaits your command." }]);
+
+      setSelectedRepo(repo);
+      setActiveCabinId(cabinId);
+      setShowWill(false);
+      setWillMarkdown("");
+      setChatHistory([{ role: "executor", text: autopsy.firstQuestion ?? "Speak." }]);
     } finally {
       setIsProcessing(false);
     }
-  };
+  }
 
-  const handleSendMessage = async () => {
+  async function handleSendMessage() {
     if (!userInput.trim() || !selectedRepo) return;
 
-    const newHistory = [...chatHistory, { role: "user", text: userInput }];
-    setChatHistory(newHistory);
+    const next: Msg[] = [...chatHistory, { role: "user", text: userInput }];
+    setChatHistory(next);
     setUserInput("");
     setIsProcessing(true);
 
     try {
-      const res = await fetch("/api/executor", {
+      const interview = await fetch("/api/executor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          mode: "interview",
           owner: username.trim(),
           repo: selectedRepo,
-          mode: "compile_will",
-          userAnswer: newHistory.map((m) => `${m.role}: ${m.text}`).join("\n"),
+          candidates: [],
+          history: next,
         }),
-      });
-      const data = await res.json();
-      setChatHistory([...newHistory, { role: "executor", text: data.response }]);
-      setShowWill(true);
+      }).then((r) => r.json());
+
+      if (interview.readyToCompile) {
+        const will = await fetch("/api/executor", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "compile_will",
+            owner: username.trim(),
+            repo: selectedRepo,
+            history: next,
+          }),
+        }).then((r) => r.json());
+
+        const md = will.markdown ?? "_(The executor could not compose the will.)_";
+        setWillMarkdown(md);
+        setChatHistory([
+          ...next,
+          { role: "executor", text: "The will is sealed.\n\n" + md },
+        ]);
+        setShowWill(true);
+      } else {
+        setChatHistory([
+          ...next,
+          { role: "executor", text: interview.question ?? "Continue." },
+        ]);
+      }
     } catch (e) {
       console.error(e);
+      setChatHistory([...next, { role: "executor", text: "The connection wavers." }]);
     } finally {
       setIsProcessing(false);
     }
-  };
+  }
 
-  const downloadWill = () => {
-    const will = chatHistory[chatHistory.length - 1]?.text ?? "";
-    const blob = new Blob([will], { type: "text/markdown" });
+  function downloadWill() {
+    const blob = new Blob([willMarkdown], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${selectedRepo}-will.md`;
     a.click();
     URL.revokeObjectURL(url);
-  };
+  }
 
   return (
     <main className="relative w-full h-screen overflow-hidden bg-[#0a0a0c] text-gray-200 font-mono">
-      <StudyScene repos={repos} onInteract={handleInteract} />
+      <StudyScene
+        activeCabinId={activeCabinId}
+        cabinData={cabinData}
+        onSelectCabin={(id) => {
+          if (id === activeCabinId) return;
+          setSelectedRepo(null);
+          setActiveCabinId(null);
+        }}
+      />
 
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-start p-6 pointer-events-none">
         <motion.div
@@ -110,7 +222,8 @@ export default function Home() {
             THE LAST COMMIT
           </h1>
           <p className="mt-2 text-gray-400 text-sm max-w-md mx-auto">
-            Draft the digital will for your open-source legacy. Select a reliquary to begin.
+            Draft the digital will for your open-source legacy. Enter a handle to be led to a
+            cabin.
           </p>
         </motion.div>
 
@@ -118,15 +231,27 @@ export default function Home() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="pointer-events-auto mt-8"
+            className="pointer-events-auto mt-6 flex flex-col items-center gap-3"
           >
             <input
               type="text"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => onUsernameChange(e.target.value)}
               className="bg-gray-900/80 border border-gray-700 text-white px-4 py-2 rounded text-center w-64 focus:outline-none focus:border-blue-500"
               placeholder="GitHub Username"
             />
+            <button
+              onClick={enterStudy}
+              disabled={isProcessing}
+              className="bg-amber-900/50 hover:bg-amber-900/70 text-amber-100 px-6 py-2 rounded transition disabled:opacity-50"
+            >
+              {isProcessing ? "Summoning the Executor…" : "Enter the Study"}
+            </button>
+            {previewRepos.length > 0 && (
+              <p className="text-gray-500 text-xs">
+                {previewRepos.length} repositories found — one will be chosen at random.
+              </p>
+            )}
           </motion.div>
         )}
 
@@ -142,7 +267,10 @@ export default function Home() {
                 <div className="flex justify-between items-center mb-3 border-b border-gray-800 pb-2">
                   <span className="text-blue-400 font-bold">Executor: {selectedRepo}</span>
                   <button
-                    onClick={() => setSelectedRepo(null)}
+                    onClick={() => {
+                      setSelectedRepo(null);
+                      setActiveCabinId(null);
+                    }}
                     className="text-gray-500 hover:text-white text-sm"
                   >
                     Close
@@ -164,7 +292,7 @@ export default function Home() {
                   ))}
                   {isProcessing && (
                     <div className="text-gray-500 text-sm italic animate-pulse">
-                      The executor is contemplating...
+                      The executor is contemplating…
                     </div>
                   )}
                 </div>
@@ -176,7 +304,7 @@ export default function Home() {
                       value={userInput}
                       onChange={(e) => setUserInput(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                      placeholder="Answer the executor's question..."
+                      placeholder="Answer the executor's question…"
                       className="flex-1 bg-gray-800 border border-gray-600 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500"
                     />
                     <button
@@ -189,7 +317,9 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="text-center">
-                    <p className="text-green-400 text-sm mb-2">The Digital Will has been sealed.</p>
+                    <p className="text-green-400 text-sm mb-2">
+                      The Digital Will has been sealed.
+                    </p>
                     <div className="flex gap-2 justify-center">
                       <button
                         onClick={downloadWill}
@@ -198,7 +328,10 @@ export default function Home() {
                         Download will
                       </button>
                       <button
-                        onClick={() => setSelectedRepo(null)}
+                        onClick={() => {
+                          setSelectedRepo(null);
+                          setActiveCabinId(null);
+                        }}
                         className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded"
                       >
                         Return to the Study
@@ -210,6 +343,12 @@ export default function Home() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {selectedRepo && (
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-amber-200/40 text-[10px] font-mono pointer-events-none">
+            WASD / arrows to walk · ESC to return to the foyer
+          </div>
+        )}
       </div>
     </main>
   );
