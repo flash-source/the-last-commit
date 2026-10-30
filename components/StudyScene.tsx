@@ -42,25 +42,44 @@ export default function StudyScene({ activeCabinId, cabinData, onSelectCabin }: 
 
   return (
     <div className="absolute inset-0 z-0">
-      <Canvas shadows camera={{ position: [0, 26, 26], fov: 55 }} dpr={[1, 2]}>
-        <color attach="background" args={["#0a0907"]} />
-        <fog attach="fog" args={["#0a0907", 20, 60]} />
+      <Canvas shadows camera={{ position: [0, 18, 22], fov: 55 }} dpr={[1, 2]}>
+        <color attach="background" args={["#050403"]} />
+        <fog attach="fog" args={["#050403", 10, 45]} />
 
-        <ambientLight intensity={0.12} color="#3b2d1f" />
+        <ambientLight intensity={0.08} color="#3b2d1f" />
         <directionalLight
-          position={[8, 14, 6]}
-          intensity={0.28}
-          color="#7a6a4a"
+          position={[-10, 12, 5]}
+          intensity={0.15}
+          color="#7a8a9a"
           castShadow
           shadow-mapSize={[1024, 1024]}
         />
 
-        <Sparkles count={120} scale={40} size={1.6} speed={0.12} opacity={0.25} color="#ffd28a" />
+        <Sparkles count={300} scale={[40, 15, 40]} size={2} speed={0.1} opacity={0.4} color="#ffd28a" position={[0, 10, 0]} />
 
-        {/* floor */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-          <planeGeometry args={[80, 60]} />
-          <meshStandardMaterial color="#161310" roughness={0.95} />
+          <planeGeometry args={[50, 50]} />
+          <meshStandardMaterial color="#14100c" roughness={0.95} />
+        </mesh>
+
+        <mesh position={[0, 10, -18]} receiveShadow>
+          <boxGeometry args={[50, 20, 1]} />
+          <meshStandardMaterial color="#1a1612" roughness={1} />
+        </mesh>
+
+        <mesh position={[-18, 10, 0]} receiveShadow>
+          <boxGeometry args={[1, 20, 50]} />
+          <meshStandardMaterial color="#1a1612" roughness={1} />
+        </mesh>
+
+        <mesh position={[18, 10, 0]} receiveShadow>
+          <boxGeometry args={[1, 20, 50]} />
+          <meshStandardMaterial color="#1a1612" roughness={1} />
+        </mesh>
+
+        <mesh position={[0, 15, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[50, 50]} />
+          <meshStandardMaterial color="#0f0c09" />
         </mesh>
 
         {cabins.map((c) => (

@@ -2,13 +2,15 @@
 
 import { useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import type { CabinData } from "@/components/StudyScene";
+import SidePanel from "@/components/SidePanel";
 
 const StudyScene = dynamic(() => import("@/components/StudyScene"), { ssr: false });
 
 const COLS = 6;
 const ROWS = 4;
+
 function randomCabinId() {
   return `cabin-${Math.floor(Math.random() * COLS * ROWS)}`;
 }
@@ -118,7 +120,7 @@ export default function Home() {
             }`,
           },
           {
-            title: "SUCCESSOR CANDIDATE",
+            title: "SUCCESSOR",
             body: `${autopsy.recommendedSuccessor ?? "none"}\n\n${
               autopsy.reasoning ?? ""
             }\n\n"${autopsy.firstQuestion ?? "The executor awaits."}"`,
@@ -200,156 +202,82 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
+  function closePanel() {
+    setSelectedRepo(null);
+    setActiveCabinId(null);
+  }
+
   return (
-    <main className="relative w-full h-screen overflow-hidden bg-[#0a0a0c] text-gray-200 font-mono">
+    <main className="relative w-full h-screen overflow-hidden bg-[#050403] text-gray-200 font-mono">
       <StudyScene
         activeCabinId={activeCabinId}
         cabinData={cabinData}
         onSelectCabin={(id) => {
           if (id === activeCabinId) return;
-          setSelectedRepo(null);
-          setActiveCabinId(null);
+          closePanel();
         }}
       />
 
-      <div className="absolute inset-0 z-10 flex flex-col items-center justify-start p-6 pointer-events-none">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="pointer-events-auto text-center mb-4"
-        >
-          <h1 className="text-4xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-gray-100 to-gray-500 tracking-tight">
-            THE LAST COMMIT
-          </h1>
-          <p className="mt-2 text-gray-400 text-sm max-w-md mx-auto">
-            Draft the digital will for your open-source legacy. Enter a handle to be led to a
-            cabin.
-          </p>
-        </motion.div>
+      {!selectedRepo && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-start pt-32 pointer-events-none">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="pointer-events-auto text-center mb-8"
+          >
+            <h1 className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-amber-100 to-amber-900 tracking-tight drop-shadow-2xl font-serif">
+              THE LAST COMMIT
+            </h1>
+            <p className="mt-4 text-gray-400 text-sm max-w-md mx-auto">
+              Draft the digital will for your open-source legacy.<br/>Enter a handle to be led to a cabin.
+            </p>
+          </motion.div>
 
-        {!selectedRepo && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="pointer-events-auto mt-6 flex flex-col items-center gap-3"
+            className="pointer-events-auto flex flex-col items-center gap-4 bg-black/40 p-8 rounded-2xl border border-gray-800 backdrop-blur-md shadow-2xl"
           >
             <input
               type="text"
               value={username}
               onChange={(e) => onUsernameChange(e.target.value)}
-              className="bg-gray-900/80 border border-gray-700 text-white px-4 py-2 rounded text-center w-64 focus:outline-none focus:border-blue-500"
+              className="bg-gray-900/80 border border-gray-700 text-white px-4 py-3 rounded-lg text-center w-72 focus:outline-none focus:border-amber-500 transition-colors"
               placeholder="GitHub Username"
             />
             <button
               onClick={enterStudy}
               disabled={isProcessing}
-              className="bg-amber-900/50 hover:bg-amber-900/70 text-amber-100 px-6 py-2 rounded transition disabled:opacity-50"
+              className="bg-amber-900/80 hover:bg-amber-700 text-amber-100 px-8 py-3 rounded-lg transition font-semibold tracking-wide disabled:opacity-50 w-full"
             >
               {isProcessing ? "Summoning the Executor…" : "Enter the Study"}
             </button>
             {previewRepos.length > 0 && (
-              <p className="text-gray-500 text-xs">
-                {previewRepos.length} repositories found — one will be chosen at random.
+              <p className="text-amber-500/60 text-xs">
+                {previewRepos.length} repositories found — one will be chosen.
               </p>
             )}
           </motion.div>
-        )}
+        </div>
+      )}
 
-        <AnimatePresence>
-          {selectedRepo && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="absolute bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl pointer-events-auto"
-            >
-              <div className="bg-gray-900/90 backdrop-blur-md border border-gray-700 rounded-xl p-4 shadow-2xl">
-                <div className="flex justify-between items-center mb-3 border-b border-gray-800 pb-2">
-                  <span className="text-blue-400 font-bold">Executor: {selectedRepo}</span>
-                  <button
-                    onClick={() => {
-                      setSelectedRepo(null);
-                      setActiveCabinId(null);
-                    }}
-                    className="text-gray-500 hover:text-white text-sm"
-                  >
-                    Close
-                  </button>
-                </div>
+      {selectedRepo && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-amber-200/30 text-xs font-mono pointer-events-none z-10">
+          WASD / arrows to walk · ESC to return
+        </div>
+      )}
 
-                <div className="h-48 overflow-y-auto mb-3 space-y-3 pr-2">
-                  {chatHistory.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`p-3 rounded-lg text-sm whitespace-pre-wrap ${
-                        msg.role === "executor"
-                          ? "bg-gray-800 text-gray-200 border-l-2 border-blue-500"
-                          : "bg-blue-900/30 text-blue-100 border-r-2 border-blue-400 text-right"
-                      }`}
-                    >
-                      {msg.text}
-                    </div>
-                  ))}
-                  {isProcessing && (
-                    <div className="text-gray-500 text-sm italic animate-pulse">
-                      The executor is contemplating…
-                    </div>
-                  )}
-                </div>
-
-                {!showWill ? (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={userInput}
-                      onChange={(e) => setUserInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                      placeholder="Answer the executor's question…"
-                      className="flex-1 bg-gray-800 border border-gray-600 text-white px-3 py-2 rounded focus:outline-none focus:border-blue-500"
-                    />
-                    <button
-                      onClick={handleSendMessage}
-                      disabled={isProcessing}
-                      className="bg-blue-700 hover:bg-blue-600 text-white px-4 py-2 rounded font-semibold disabled:opacity-50"
-                    >
-                      Reply
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <p className="text-green-400 text-sm mb-2">
-                      The Digital Will has been sealed.
-                    </p>
-                    <div className="flex gap-2 justify-center">
-                      <button
-                        onClick={downloadWill}
-                        className="bg-blue-700 hover:bg-blue-600 text-white px-6 py-2 rounded"
-                      >
-                        Download will
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedRepo(null);
-                          setActiveCabinId(null);
-                        }}
-                        className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded"
-                      >
-                        Return to the Study
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {selectedRepo && (
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-amber-200/40 text-[10px] font-mono pointer-events-none">
-            WASD / arrows to walk · ESC to return to the foyer
-          </div>
-        )}
-      </div>
+      <SidePanel
+        selectedRepo={selectedRepo}
+        chatHistory={chatHistory}
+        userInput={userInput}
+        setUserInput={setUserInput}
+        handleSendMessage={handleSendMessage}
+        isProcessing={isProcessing}
+        showWill={showWill}
+        downloadWill={downloadWill}
+        onClose={closePanel}
+      />
     </main>
   );
 }

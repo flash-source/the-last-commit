@@ -14,7 +14,7 @@ type Phase = "overview" | "transit" | "walking";
 export default function CameraRig({ activeCabinId, cabins }: Props) {
   const { camera } = useThree();
   const phase = useRef<Phase>("overview");
-  const targetPos = useRef(new THREE.Vector3(0, 26, 26));
+  const targetPos = useRef(new THREE.Vector3(0, 18, 22));
   const targetLook = useRef(new THREE.Vector3(0, 0, 0));
   const lookCurrent = useRef(new THREE.Vector3(0, 0, 0));
   const keys = useRef<Record<string, boolean>>({});
@@ -22,7 +22,7 @@ export default function CameraRig({ activeCabinId, cabins }: Props) {
   useEffect(() => {
     if (!activeCabinId) {
       phase.current = "overview";
-      targetPos.current.set(0, 26, 26);
+      targetPos.current.set(0, 18, 22);
       targetLook.current.set(0, 0, 0);
       return;
     }
@@ -30,8 +30,8 @@ export default function CameraRig({ activeCabinId, cabins }: Props) {
     if (!cabin) return;
     phase.current = "transit";
     const [x, , z] = cabin.position;
-    targetPos.current.set(x, 1.45, z + 2.4);
-    targetLook.current.set(x, 0.85, z - 0.3);
+    targetPos.current.set(x, 1.4, z + 1.8);
+    targetLook.current.set(x, 0.8, z - 0.2);
   }, [activeCabinId, cabins]);
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function CameraRig({ activeCabinId, cabins }: Props) {
       keys.current[e.key.toLowerCase()] = true;
       if (e.key === "Escape") {
         phase.current = "overview";
-        targetPos.current.set(0, 26, 26);
+        targetPos.current.set(0, 18, 22);
         targetLook.current.set(0, 0, 0);
       }
     };
@@ -81,7 +81,7 @@ export default function CameraRig({ activeCabinId, cabins }: Props) {
       if (keys.current["s"] || keys.current["arrowdown"]) cam.position.addScaledVector(forward, -speed);
       if (keys.current["d"] || keys.current["arrowright"]) cam.position.addScaledVector(right, speed);
       if (keys.current["a"] || keys.current["arrowleft"]) cam.position.addScaledVector(right, -speed);
-      cam.position.y = 1.45;
+      cam.position.y = 1.4;
     }
 
     if (phase.current === "overview") {
