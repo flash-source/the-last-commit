@@ -56,7 +56,6 @@ export async function POST(req: Request) {
     if (!mode || !owner || !repo)
       return NextResponse.json({ error: "mode, owner, repo required" }, { status: 400 });
 
-    // PROGRAMMATIC SAFETY NET: If user has answered 3 times, force compilation.
     if (mode === "interview" && history) {
       const userTurns = history.filter((h: any) => h.role === "user").length;
       if (userTurns >= 3) {
@@ -103,7 +102,7 @@ export async function POST(req: Request) {
           stream: false,
           format: "json",
           think: false,
-          options: { temperature: mode === "interview" ? 0.6 : 0.4 }, // Lowered temp for more focused answers
+          options: { temperature: mode === "interview" ? 0.6 : 0.4 },
         }),
       });
       if (ollamaRes.ok) {
@@ -116,11 +115,9 @@ export async function POST(req: Request) {
           parsed = m ? JSON.parse(m[0]) : null;
         }
       }
-    } catch {
-      /* fall through to fallback */
-    }
+    } catch {}
 
-    if (!parsed) parsed = fallback(mode as Mode, facts);
+    if (!parsed) parsed = fallback(mode as Mode, facts, history);
     return NextResponse.json({ mode, ...parsed });
   } catch (error) {
     console.error("Executor error:", error);
@@ -131,7 +128,7 @@ export async function POST(req: Request) {
   }
 }
 
-function fallback(mode: Mode, facts: any) {
+function fallback(mode: Mode, facts: any, history?: any[]) {
   const top = facts.candidates?.[0]?.login ?? "none";
   const lastMsg = (facts.lastCommit?.message ?? "").split("\n")[0].slice(0, 80);
   const lastDate = facts.lastCommit?.date?.slice(0, 10) ?? "long ago";
@@ -148,20 +145,30 @@ function fallback(mode: Mode, facts: any) {
       firstQuestion: `Your last commit read "${lastMsg}". Was that a surrender, or a pause?`,
     };
 
-  if (mode === "interview")
-    return {
-      question: `Who will inherit or maintain this repository?`,
-      hint: "A username, a team, or no one.",
-      readyToCompile: false,
-    };
+  if (mode === "interview") {
+    const turns = history?.filter((h: any) => h.role === "user").length ?? 0;
+    const questions = [
+      {
+        question: "Who will inherit or maintain this repository?",
+        hint: "A username, a team, or no one.",
+      },
+      {
+        question:
+          "What should happen to the repository (archive, delete, freeze), and what is your final message to the community?",
+        hint: "One answer for both is fine.",
+      },
+    ];
+    const next = questions[Math.min(Math.max(turns - 1, 0), questions.length - 1)];
+    return { ...next, readyToCompile: false };
+  }
 
-  const will = `# The Last Commit — Digital Will & Testament
+  const will = `# The Last Commit: Digital Will & Testament
 
 **Repository:** ${facts.owner}/${facts.repo}
 **Date:** ${new Date().toISOString().slice(0, 10)}
 
 ## I. Succession Plan
-Maintainership passes to **${top}** — ${top !== "none" ? "the highest surviving contribution count after the owner." : "no living contributors remain; the repository becomes a public read-only archive."}
+${top !== "none" ? `Maintainership passes to **${top}**, who has the highest surviving contribution count after the owner.` : "No living contributors remain. The repository becomes a public read-only archive."}
 
 ## II. Final Directives
 - Freeze the default branch and archive the repository after 12 months of inactivity.
@@ -169,7 +176,7 @@ Maintainership passes to **${top}** — ${top !== "none" ? "the highest survivin
 - Pin the readme note below to the root README.
 
 ## III. Closing Message to the Community
-This project served its purpose. It was written in the open, abandoned in the open, and now rests in the open. Move on with grace — and fork freely.
+This project served its purpose. It was written in the open, abandoned in the open, and now rests in the open. Move on with grace, and fork freely.
 
 *Epitaph: Here lies a repository that did its best.*
 `;
