@@ -1,10 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Html } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import type { CabinData } from "./StudyScene";
+import type { CabinData, Paper as PaperData } from "./StudyScene";
 
 interface Props {
   id: string;
@@ -12,14 +12,124 @@ interface Props {
   active: boolean;
   data: CabinData | null;
   onSelect: () => void;
+  onOpenPaper: (index: number) => void;
 }
 
 const PAPER_COUNT = 3;
+const PAPER_PITCH = 0.6;
+const PAPER_W = 0.54;
+const PAPER_H = 0.63;
+const PAPER_Y = 0.845;
+const PAPER_Z = -0.08;
+const HTML_DISTANCE_FACTOR = 0.45;
+const PX_PER_UNIT = 400 / HTML_DISTANCE_FACTOR;
+const HOVER_RAISE = 0.07;
+const SETTLE_DROP = 0.4;
 
-export default function Cabin({ id, position, active, data, onSelect }: Props) {
+function DeskPaper({
+  index,
+  paper,
+  onOpen,
+}: {
+  index: number;
+  paper: PaperData;
+  onOpen: (index: number) => void;
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
-  const [hoveredPaper, setHoveredPaper] = useState<number | null>(null);
+
+  const x = (index - 1) * PAPER_PITCH;
+  const tilt = index === 0 ? -2 : index === 2 ? 2 : 0;
+
+  const startPos = useMemo(
+    () => new THREE.Vector3(x, PAPER_Y + SETTLE_DROP, PAPER_Z),
+    [x]
+  );
+  const flatQuat = useMemo(
+    () => new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)),
+    []
+  );
+
+  useFrame((_, delta) => {
+    const g = groupRef.current;
+    if (!g) return;
+    const k = 1 - Math.pow(0.0005, Math.min(delta, 0.05));
+    const targetY = PAPER_Y + (hovered ? HOVER_RAISE : 0);
+    g.position.y = THREE.MathUtils.lerp(g.position.y, targetY, k);
+  });
+
+  return (
+    <>
+      <mesh
+        position={[x, PAPER_Y + 0.015, PAPER_Z]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+          setHovered(true);
+        }}
+        onPointerOut={() => setHovered(false)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen(index);
+        }}
+      >
+        <planeGeometry args={[PAPER_W, PAPER_H]} />
+        <meshBasicMaterial visible={false} />
+      </mesh>
+
+      <group ref={groupRef} position={startPos} quaternion={flatQuat}>
+        <Html
+          transform
+          center
+          distanceFactor={HTML_DISTANCE_FACTOR}
+          style={{ pointerEvents: "none" }}
+        >
+          <div
+            style={{
+              width: PAPER_W * PX_PER_UNIT,
+              height: PAPER_H * PX_PER_UNIT,
+              boxSizing: "border-box",
+              padding: 24,
+              overflow: "hidden",
+              background: hovered ? "#f1e6cb" : "#e8dcc0",
+              color: "#2a1f14",
+              fontFamily: "Georgia, serif",
+              fontSize: 20,
+              lineHeight: 1.4,
+              whiteSpace: "pre-wrap",
+              border: hovered ? "2px solid #ffd28a" : "2px solid #8a7a5c",
+              borderRadius: 8,
+              boxShadow: hovered
+                ? "0 0 40px rgba(255,200,120,0.45)"
+                : "0 12px 40px rgba(0,0,0,0.7)",
+              transform: `rotate(${tilt}deg)`,
+              transition: "background 0.25s ease-out, border-color 0.25s ease-out, box-shadow 0.25s ease-out",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: "bold",
+                fontSize: 22,
+                borderBottom: "2px solid #8a7a5c",
+                marginBottom: 12,
+                paddingBottom: 4,
+                letterSpacing: 1,
+              }}
+            >
+              {paper.title}
+            </div>
+            <div>{paper.body}</div>
+          </div>
+        </Html>
+      </group>
+    </>
+  );
+}
+
+export default function Cabin({ id, position, active, data, onSelect, onOpenPaper }: Props) {
+  const groupRef = useRef<THREE.Group>(null);
+  const [hovered, setHovered] = useState(false);
 
   useFrame(({ clock }) => {
     if (!active) return;
@@ -99,7 +209,7 @@ export default function Cabin({ id, position, active, data, onSelect }: Props) {
 
       {active && (
         <group position={[0.3, 0.85, 0.2]}>
-          <mesh castShadow>
+          <mesh>
             <octahedronGeometry args={[0.08, 0]} />
             <meshStandardMaterial
               color="#ffddaa"
@@ -108,13 +218,7 @@ export default function Cabin({ id, position, active, data, onSelect }: Props) {
               toneMapped={false}
             />
           </mesh>
-          <pointLight
-            position={[0, 0.15, 0]}
-            intensity={1.5}
-            color="#ffaa55"
-            distance={4}
-            castShadow
-          />
+          <pointLight position={[0, 0.15, 0]} intensity={1.5} color="#ffaa55" distance={4} />
         </group>
       )}
 
@@ -133,78 +237,18 @@ export default function Cabin({ id, position, active, data, onSelect }: Props) {
         </div>
       </Html>
 
-      {Array.from({ length: PAPER_COUNT }).map((_, i) => {
-        const paper = data?.papers?.[i];
-        const isVisible = active && !!paper;
-        const isHovered = hoveredPaper === i;
-
-        return (
-          <group key={i}>
-            {isVisible && (
-              <mesh
-                position={[(i - 1) * 0.6, 0.86, -0.08]}
-                rotation={[-Math.PI / 2, 0, 0]}
-                onPointerOver={(e) => {
-                  e.stopPropagation();
-                  document.body.style.cursor = "pointer";
-                  setHoveredPaper(i);
-                }}
-                onPointerOut={(e) => {
-                  e.stopPropagation();
-                  document.body.style.cursor = "auto";
-                  setHoveredPaper(null);
-                }}
-              >
-                <planeGeometry args={[0.6, 0.8]} />
-                <meshBasicMaterial visible={false} />
-              </mesh>
-            )}
-
-            <Html
-              position={isHovered ? [0, 1.5, 0.5] : [(i - 1) * 0.6, 0.85, -0.08]}
-              rotation={isHovered ? [0, 0, 0] : [-Math.PI / 2, 0, 0]}
-              transform
-              distanceFactor={isHovered ? 5 : 2}
-              style={{
-                display: isVisible ? "block" : "none",
-                pointerEvents: "none",
-                transition: "opacity 0.2s ease-out",
-              }}
-            >
-              <div
-                style={{
-                  width: 220,
-                  background: "#e8dcc0",
-                  color: "#2a1f14",
-                  padding: 12,
-                  fontFamily: "Georgia, serif",
-                  fontSize: isHovered ? 14 : 10,
-                  lineHeight: 1.4,
-                  boxShadow: isHovered ? "0 12px 32px rgba(0,0,0,0.9)" : "0 6px 20px rgba(0,0,0,0.7)",
-                  borderRadius: 4,
-                  border: "1px solid #8a7a5c",
-                  transform: `rotate(${isHovered ? 0 : i === 0 ? -2 : i === 2 ? 2 : 0}deg)`,
-                  opacity: isVisible ? 1 : 0,
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: "bold",
-                    borderBottom: "1px solid #8a7a5c",
-                    marginBottom: 6,
-                    paddingBottom: 2,
-                    fontSize: isHovered ? 16 : 11,
-                  }}
-                >
-                  {paper?.title ?? ""}
-                </div>
-                <div>{paper?.body ?? ""}</div>
-              </div>
-            </Html>
-          </group>
-        );
-      })}
+      {active &&
+        data &&
+        Array.from({ length: PAPER_COUNT }).map((_, i) =>
+          data.papers[i] ? (
+            <DeskPaper
+              key={`${data.repoName}-${i}`}
+              index={i}
+              paper={data.papers[i]}
+              onOpen={onOpenPaper}
+            />
+          ) : null
+        )}
     </group>
   );
 }

@@ -31,9 +31,10 @@ interface Props {
   activeCabinId: string | null;
   cabinData: CabinData | null;
   onSelectCabin: (id: string) => void;
+  onOpenPaper: (index: number) => void;
 }
 
-export default function StudyScene({ activeCabinId, cabinData, onSelectCabin }: Props) {
+export default function StudyScene({ activeCabinId, cabinData, onSelectCabin, onOpenPaper }: Props) {
   const totalSlots = COLS * ROWS;
   const cabins = Array.from({ length: totalSlots }, (_, i) => ({
     id: `cabin-${i}`,
@@ -90,6 +91,7 @@ export default function StudyScene({ activeCabinId, cabinData, onSelectCabin }: 
             active={activeCabinId === c.id}
             data={activeCabinId === c.id ? cabinData : null}
             onSelect={() => onSelectCabin(c.id)}
+            onOpenPaper={onOpenPaper}
           />
         ))}
 

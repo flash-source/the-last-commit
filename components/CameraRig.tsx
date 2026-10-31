@@ -11,6 +11,19 @@ interface Props {
 
 type Phase = "overview" | "transit" | "walking";
 
+function isTypingTarget(target: EventTarget | null) {
+  const el = target as HTMLElement | null;
+  if (!el || !el.tagName) return false;
+  const tag = el.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    el.isContentEditable ||
+    !!el.closest("[data-no-keys]")
+  );
+}
+
 export default function CameraRig({ activeCabinId, cabins }: Props) {
   const { camera } = useThree();
   const phase = useRef<Phase>("overview");
@@ -36,6 +49,7 @@ export default function CameraRig({ activeCabinId, cabins }: Props) {
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
       keys.current[e.key.toLowerCase()] = true;
       if (e.key === "Escape") {
         phase.current = "overview";
@@ -46,11 +60,16 @@ export default function CameraRig({ activeCabinId, cabins }: Props) {
     const up = (e: KeyboardEvent) => {
       keys.current[e.key.toLowerCase()] = false;
     };
+    const clear = () => {
+      keys.current = {};
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
+    window.addEventListener("blur", clear);
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", clear);
     };
   }, []);
 

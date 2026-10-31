@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import type { CabinData } from "@/components/StudyScene";
 import SidePanel from "@/components/SidePanel";
+import PaperReader from "@/components/PaperReader";
 
 const StudyScene = dynamic(() => import("@/components/StudyScene"), { ssr: false });
 
@@ -28,6 +29,7 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showWill, setShowWill] = useState(false);
   const [willMarkdown, setWillMarkdown] = useState("");
+  const [openPaper, setOpenPaper] = useState<number | null>(null);
 
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -132,6 +134,7 @@ export default function Home() {
       setActiveCabinId(cabinId);
       setShowWill(false);
       setWillMarkdown("");
+      setOpenPaper(null);
       setChatHistory([{ role: "executor", text: autopsy.firstQuestion ?? "Speak." }]);
     } finally {
       setIsProcessing(false);
@@ -205,6 +208,7 @@ export default function Home() {
   function closePanel() {
     setSelectedRepo(null);
     setActiveCabinId(null);
+    setOpenPaper(null);
   }
 
   return (
@@ -212,6 +216,7 @@ export default function Home() {
       <StudyScene
         activeCabinId={activeCabinId}
         cabinData={cabinData}
+        onOpenPaper={(i) => setOpenPaper(i)}
         onSelectCabin={(id) => {
           if (id === activeCabinId) return;
           closePanel();
@@ -263,7 +268,7 @@ export default function Home() {
 
       {selectedRepo && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-amber-200/30 text-xs font-mono pointer-events-none z-10">
-          WASD / arrows to walk · ESC to return
+          WASD / arrows to walk · click a paper to read · ESC to return
         </div>
       )}
 
@@ -278,6 +283,15 @@ export default function Home() {
         downloadWill={downloadWill}
         onClose={closePanel}
       />
+
+      {openPaper !== null && selectedRepo && cabinData && (
+        <PaperReader
+          papers={cabinData.papers}
+          index={openPaper}
+          onChange={setOpenPaper}
+          onClose={() => setOpenPaper(null)}
+        />
+      )}
     </main>
   );
 }
