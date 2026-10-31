@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://127.0.0.1:11434";
-const MODEL = process.env.OLLAMA_MODEL ?? "llama3";
+const MODEL = process.env.OLLAMA_MODEL ?? "gemma4:e4b";
 
 type Mode = "autopsy" | "interview" | "compile_will";
 
@@ -22,11 +22,22 @@ Given the repository facts and candidate successors, produce JSON with keys:
 
   if (mode === "interview")
     return `${base}
-You are mid-interview. Given the repo facts and prior conversation, produce JSON with keys:
-- "question": the NEXT single question. Must reference the owner's previous answer or a specific fact. Never repeat an earlier question.
+You are mid-interview. Your goal is to gather enough information to write a digital will.
+Review the PRIOR CONVERSATION carefully.
+
+You have EXACTLY 3 questions to ask in total.
+Do NOT interrogate the user. Do NOT ask follow-up questions for the same topic. If the user gives a brief answer, accept it immediately and move to the next topic.
+Ask one question for Topic 1, then Topic 2, then Topic 3.
+- Topic 1: Who will inherit or maintain this project?
+- Topic 2: What should happen to the repository (archive, delete, freeze)?
+- Topic 3: What is your final message to the community?
+
+If you have already asked 3 questions (or the user has answered 3 times), you MUST set "readyToCompile": true and set "question" to "The will is ready to be sealed. Shall we read it?"
+
+Produce JSON with keys:
+- "question": the NEXT single question. 
 - "hint": an optional 8-word hint.
-- "readyToCompile": true if the interview has already covered succession, archival intent, and a final message — otherwise false.
-If readyToCompile is true, set "question" to "The will is ready to be sealed. Shall we read it?"`;
+- "readyToCompile": true if all 3 topics are covered, otherwise false.`;
 
   return `${base}
 The interview is complete. Produce the final will as JSON with keys:
@@ -44,6 +55,19 @@ export async function POST(req: Request) {
 
     if (!mode || !owner || !repo)
       return NextResponse.json({ error: "mode, owner, repo required" }, { status: 400 });
+
+    // PROGRAMMATIC SAFETY NET: If user has answered 3 times, force compilation.
+    if (mode === "interview" && history) {
+      const userTurns = history.filter((h: any) => h.role === "user").length;
+      if (userTurns >= 3) {
+        return NextResponse.json({
+          mode,
+          question: "The will is ready to be sealed. Shall we read it?",
+          hint: "Awaiting your command.",
+          readyToCompile: true,
+        });
+      }
+    }
 
     const facts = {
       owner,
@@ -78,7 +102,8 @@ export async function POST(req: Request) {
           messages,
           stream: false,
           format: "json",
-          options: { temperature: mode === "interview" ? 0.85 : 0.6 },
+          think: false,
+          options: { temperature: mode === "interview" ? 0.6 : 0.4 }, // Lowered temp for more focused answers
         }),
       });
       if (ollamaRes.ok) {
@@ -125,8 +150,8 @@ function fallback(mode: Mode, facts: any) {
 
   if (mode === "interview")
     return {
-      question: `If ${top} inherits this repository, what is the first thing you want them to preserve?`,
-      hint: "Be concrete — a file, a convention, a README line.",
+      question: `Who will inherit or maintain this repository?`,
+      hint: "A username, a team, or no one.",
       readyToCompile: false,
     };
 
