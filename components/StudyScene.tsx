@@ -23,6 +23,11 @@ export function slotPosition(slot: number): [number, number, number] {
   ];
 }
 
+const CABINS = Array.from({ length: COLS * ROWS }, (_, i) => ({
+  id: `cabin-${i}`,
+  position: slotPosition(i),
+}));
+
 export function randomSlot(): number {
   return Math.floor(Math.random() * COLS * ROWS);
 }
@@ -35,12 +40,6 @@ interface Props {
 }
 
 export default function StudyScene({ activeCabinId, cabinData, onSelectCabin, onOpenPaper }: Props) {
-  const totalSlots = COLS * ROWS;
-  const cabins = Array.from({ length: totalSlots }, (_, i) => ({
-    id: `cabin-${i}`,
-    position: slotPosition(i),
-  }));
-
   return (
     <div className="absolute inset-0 z-0">
       <Canvas shadows camera={{ position: [0, 18, 22], fov: 55 }} dpr={[1, 2]}>
@@ -83,7 +82,7 @@ export default function StudyScene({ activeCabinId, cabinData, onSelectCabin, on
           <meshStandardMaterial color="#0f0c09" />
         </mesh>
 
-        {cabins.map((c) => (
+        {CABINS.map((c) => (
           <Cabin
             key={c.id}
             id={c.id}
@@ -95,7 +94,7 @@ export default function StudyScene({ activeCabinId, cabinData, onSelectCabin, on
           />
         ))}
 
-        <CameraRig activeCabinId={activeCabinId} cabins={cabins} />
+        <CameraRig activeCabinId={activeCabinId} cabins={CABINS} />
         <AudioManager activeCabinId={activeCabinId} />
       </Canvas>
     </div>

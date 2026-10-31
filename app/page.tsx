@@ -217,10 +217,7 @@ export default function Home() {
         activeCabinId={activeCabinId}
         cabinData={cabinData}
         onOpenPaper={(i) => setOpenPaper(i)}
-        onSelectCabin={(id) => {
-          if (id === activeCabinId) return;
-          closePanel();
-        }}
+        onSelectCabin={() => {}}
       />
 
       {!selectedRepo && (
@@ -268,7 +265,27 @@ export default function Home() {
 
       {selectedRepo && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-amber-200/30 text-xs font-mono pointer-events-none z-10">
-          WASD / arrows to walk · click a paper to read · ESC to return
+          WASD / arrows to walk · click a paper or use the buttons to read
+        </div>
+      )}
+
+      {selectedRepo && cabinData && (
+        <div
+          data-no-keys
+          className="fixed bottom-14 left-6 z-20 flex flex-col gap-2 pointer-events-auto"
+        >
+          <span className="text-[10px] uppercase tracking-widest text-amber-200/40">
+            On the desk
+          </span>
+          {cabinData.papers.map((paper, i) => (
+            <button
+              key={paper.title}
+              onClick={() => setOpenPaper(i)}
+              className="rounded border border-amber-900/60 bg-[#e8dcc0]/90 px-4 py-2 text-left font-serif text-sm text-[#2a1f14] shadow-lg transition hover:bg-[#f1e6cb]"
+            >
+              {paper.title}
+            </button>
+          ))}
         </div>
       )}
 
